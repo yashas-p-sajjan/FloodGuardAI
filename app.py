@@ -67,6 +67,11 @@ recent_snapshot_rows = dashboard_data.recent_snapshot_rows
 validate_bundle = dashboard_data.validate_bundle
 
 PAGES = ("Dashboard", "Risk Map", "Data & Sources", "About")
+MAP_LEGEND_LABELS = (
+    "LOW", "MODERATE", "HIGH", "VERY HIGH",
+    "Category withheld: low coverage", "Coverage unavailable", "Score unavailable",
+)
+STATUS_DISTRIBUTION_LABELS = MAP_LEGEND_LABELS
 WINDOW_COLUMNS = {
     1: "Rainfall_Prev_1d_mm",
     3: "Rainfall_Prev_3d_mm",
@@ -503,6 +508,22 @@ def fmt_number(value, suffix="", digits=2):
         return "Unavailable"
 
 
+def coverage_status_label(status):
+    return {
+        "PASS_AT_LEAST_80_PERCENT": "At least 80% (gate passed)",
+        "FAIL_BELOW_80_PERCENT": "Below 80% (category withheld)",
+        "UNAVAILABLE_COVERAGE": "Coverage unavailable",
+    }.get(status, "Coverage unavailable")
+
+
+def status_distribution_counts(statuses):
+    counts = dict.fromkeys(STATUS_DISTRIBUTION_LABELS, 0)
+    for status in statuses:
+        if status in counts:
+            counts[status] += 1
+    return counts
+
+
 def exact_history(boundary_id):
     if not boundary_id:
         return pd.DataFrame()
@@ -582,14 +603,7 @@ def render_map(snapshot, state, height=610, focus_district=None):
 
 
 def render_legend():
-    items = [
-        ("LOW", MAP_STATUS_COLORS["LOW"]),
-        ("MODERATE", MAP_STATUS_COLORS["MODERATE"]),
-        ("HIGH", MAP_STATUS_COLORS["HIGH"]),
-        ("VERY HIGH", MAP_STATUS_COLORS["VERY HIGH"]),
-        ("Category withheld: low coverage", MAP_STATUS_COLORS["Category withheld: low coverage"]),
-        ("Score unavailable", MAP_STATUS_COLORS["Score unavailable"]),
-    ]
+    items = [(label, MAP_STATUS_COLORS[label]) for label in MAP_LEGEND_LABELS]
     labels = "".join(
         f'<span><b style="color:{color}" aria-hidden="true">●</b> {escape(label)}</span>'
         for label, color in items
@@ -787,7 +801,7 @@ def data_reliability_card():
         st.write(f"7-day valid observations: **{feature.get('Valid_Rainfall_Days_Prev_7d','Unavailable')} / {feature.get('Expected_Rainfall_Days_Prev_7d','Unavailable')}**")
         last_observation = feature.get("Previous_Rainfall_Date_Used", "")
         st.write(f"Latest rainfall observation used: **{last_observation or 'Unavailable'}**")
-    coverage_text = "Available (at least 80%)" if rec["Coverage_Gate_Status"] == "PASS_AT_LEAST_80_PERCENT" else "Limited or unavailable"
+    coverage_text = coverage_status_label(rec["Coverage_Gate_Status"])
     st.write(f"Coverage gate: **{coverage_text}**")
     st.write("Live feed: **Not connected**")
     st.write("Boundary vintage: **Current validated boundary; historical identity may differ**")
@@ -856,7 +870,7 @@ def render_status_distribution(ranked):
     if ranked.empty:
         st.info("No saved district scores are available for this state and date.")
         return
-    counts = ranked["Screening status"].value_counts()
+    counts = status_distribution_counts(ranked["Screening status"])
     cards = []
     status_classes = {
         "LOW": "status-low",
@@ -864,10 +878,11 @@ def render_status_distribution(ranked):
         "HIGH": "status-high",
         "VERY HIGH": "status-very-high",
         "Category withheld: low coverage": "status-withheld",
+        "Coverage unavailable": "status-unavailable",
         "Score unavailable": "status-unavailable",
     }
-    for label in ("LOW", "MODERATE", "HIGH", "VERY HIGH", "Category withheld: low coverage", "Score unavailable"):
-        count = int(counts.get(label, 0))
+    for label in STATUS_DISTRIBUTION_LABELS:
+        count = counts[label]
         cards.append(
             f'<div class="fg-status-card {status_classes[label]}"><div class="fg-status-name">{escape(label)}</div>'
             f'<div class="fg-status-count">{count} <small>districts</small></div></div>'
@@ -922,9 +937,9 @@ def render_dashboard():
         if record is not None and record["Risk_Score_Available"] == "1"
         else "Unavailable"
     )
-    coverage = "Unavailable"
-    if record is not None:
-        coverage = "At least 80% (gate passed)" if record["Coverage_Gate_Status"] == "PASS_AT_LEAST_80_PERCENT" else "Below 80% or unavailable"
+    coverage = coverage_status_label(
+        record["Coverage_Gate_Status"] if record is not None else None
+    )
 
     map_col, overview_col = st.columns([1.22, .88], gap="medium")
     with map_col.container(border=True):
