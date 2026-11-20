@@ -6,3 +6,36 @@
 .venv/
 venv/
 .DS_Store
+# Runtime datasets and geographic assets; keep data out of the source release
+/data/
+/assets/
+
+# Generated dataset and geographic-data files
+*.csv
+*.csv.gz
+*.geojson
+*.jsonl
+*.ndjson
+*.parquet
+*.feather
+*.arrow
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.sqlite
+*.db
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.tif
+*.tiff
+
+# Credential and private-key files
+credentials.*
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
